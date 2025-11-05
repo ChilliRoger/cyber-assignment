@@ -81,7 +81,7 @@ footer { text-align: center; padding: 30px 20px; margin-top: 50px; background: #
 .chart-container { background: #fff; padding: 30px; margin: 25px 0; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); display: none; border-top: 4px solid #3498db; }
 .chart-container.show { display: block; animation: slideIn 0.4s ease-out; }
 .chart-container h3 { text-align: center; color: #2c3e50; margin-bottom: 20px; font-size: 20px; font-weight: 600; }
-canvas { max-width: 100%; height: 320px !important; }
+canvas { max-width: 100%; height: auto !important; }
 </style>
 </head>
 <body>
@@ -102,7 +102,7 @@ canvas { max-width: 100%; height: 320px !important; }
 
 <h2>3. Performance Test (Client-Side)</h2>
 <div class="content-card">
-<p>Enter 5 different text inputs to see how hash generation time varies for each algorithm.</p>
+<p>Enter 5 different text inputs to see how hash generation time varies for each algorithm. The test will run 10 iterations per input for accurate results.</p>
 <div id="inputFields">
 <input type="text" id="testInput1" placeholder="Input 1: Enter text..." />
 <input type="text" id="testInput2" placeholder="Input 2: Enter text..." />
@@ -110,7 +110,13 @@ canvas { max-width: 100%; height: 320px !important; }
 <input type="text" id="testInput4" placeholder="Input 4: Enter text..." />
 <input type="text" id="testInput5" placeholder="Input 5: Enter text..." />
 </div>
-<button onclick="runPerformanceTest()">Run Speed Test</button>
+<button id="runTestBtn" onclick="runPerformanceTest()">Run Speed Test</button>
+<div id="loadingIndicator" style="display: none; margin-top: 15px; color: #3498db; font-weight: 500;">
+  <span>Running performance test...</span>
+  <div style="margin-top: 10px; background: #ecf0f1; height: 4px; border-radius: 2px; overflow: hidden;">
+    <div id="progressBar" style="background: #3498db; height: 100%; width: 0%; transition: width 0.3s;"></div>
+  </div>
+</div>
 </div>
 <div class="table-box" id="resultsTable" style="display: none;">
 <table id="perfTable">
@@ -125,6 +131,10 @@ canvas { max-width: 100%; height: 320px !important; }
 <div class="chart-container" id="chartContainer">
 <h3>Performance Comparison - Line Graph</h3>
 <canvas id="perfChart"></canvas>
+<div id="graphExplanation" style="margin-top: 25px; padding: 20px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #3498db;">
+  <h4 style="color: #2c3e50; margin-bottom: 15px; font-size: 16px;">How the Graph is Plotted:</h4>
+  <div id="explanationContent" style="font-size: 14px; color: #555; line-height: 1.8;"></div>
+</div>
 </div>
 
 <div class="report-section" id="justificationReport">
@@ -249,6 +259,15 @@ async function runPerformanceTest(){
     inputs.push(value);
   }
   
+  // Show loading indicator
+  const btn = document.getElementById('runTestBtn');
+  const loadingIndicator = document.getElementById('loadingIndicator');
+  const progressBar = document.getElementById('progressBar');
+  
+  btn.disabled = true;
+  btn.innerText = 'Testing...';
+  loadingIndicator.style.display = 'block';
+  
   const md5Times = [];
   const sha256Times = [];
   const inputLabels = [];
@@ -257,38 +276,75 @@ async function runPerformanceTest(){
   let tableHTML = `
     <tr>
       <th>Input</th>
+      <th>Length</th>
       <th>MD5 Time (ms)</th>
       <th>SHA-256 Time (ms)</th>
+      <th>Difference</th>
     </tr>`;
   
-  // Test each input
+  // Test each input multiple times for accuracy
+  const iterations = 10; // Run 10 times and take average for accuracy
+  const totalSteps = inputs.length;
+  
   for (let i = 0; i < inputs.length; i++) {
     const input = inputs[i];
     const label = input.length > 20 ? input.substring(0, 20) + '...' : input;
     inputLabels.push(`Input ${i + 1}`);
     
-    // Measure MD5
-    const t1 = performance.now();
-    md5(input);
-    const t2 = performance.now();
-    const md5Time = (t2 - t1).toFixed(3);
-    md5Times.push(parseFloat(md5Time));
+    let md5TotalTime = 0;
+    let sha256TotalTime = 0;
     
-    // Measure SHA-256
-    const t3 = performance.now();
+    // Update progress
+    progressBar.style.width = ((i / totalSteps) * 100) + '%';
+    
+    // Warm-up run
+    md5(input);
     await sha256(input);
-    const t4 = performance.now();
-    const sha256Time = (t4 - t3).toFixed(3);
-    sha256Times.push(parseFloat(sha256Time));
+    
+    // Run multiple iterations for accurate measurement
+    for (let j = 0; j < iterations; j++) {
+      // Measure MD5
+      const t1 = performance.now();
+      md5(input);
+      const t2 = performance.now();
+      md5TotalTime += (t2 - t1);
+      
+      // Small delay between operations
+      await new Promise(resolve => setTimeout(resolve, 1));
+      
+      // Measure SHA-256
+      const t3 = performance.now();
+      await sha256(input);
+      const t4 = performance.now();
+      sha256TotalTime += (t4 - t3);
+      
+      // Small delay between iterations
+      await new Promise(resolve => setTimeout(resolve, 1));
+    }
+    
+    // Calculate averages
+    const md5AvgTime = (md5TotalTime / iterations).toFixed(4);
+    const sha256AvgTime = (sha256TotalTime / iterations).toFixed(4);
+    const percentDiff = (((sha256AvgTime - md5AvgTime) / md5AvgTime) * 100).toFixed(1);
+    
+    md5Times.push(parseFloat(md5AvgTime));
+    sha256Times.push(parseFloat(sha256AvgTime));
     
     // Add to table
     tableHTML += `
       <tr>
         <td>${label}</td>
-        <td>${md5Time}</td>
-        <td>${sha256Time}</td>
+        <td>${input.length}</td>
+        <td>${md5AvgTime}</td>
+        <td>${sha256AvgTime}</td>
+        <td style="color: ${percentDiff > 0 ? '#e74c3c' : '#27ae60'};">
+          ${percentDiff > 0 ? '+' : ''}${percentDiff}%
+        </td>
       </tr>`;
   }
+  
+  // Complete progress
+  progressBar.style.width = '100%';
   
   // Update table
   document.getElementById("perfTable").innerHTML = tableHTML;
@@ -300,6 +356,14 @@ async function runPerformanceTest(){
   
   // Show justification report after test
   document.getElementById("justificationReport").classList.add("show");
+  
+  // Reset button
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.innerText = 'Run Speed Test';
+    loadingIndicator.style.display = 'none';
+    progressBar.style.width = '0%';
+  }, 500);
 }
 
 function updateChart(labels, md5Times, sha256Times) {
@@ -310,60 +374,109 @@ function updateChart(labels, md5Times, sha256Times) {
     perfChart.destroy();
   }
   
+  // Calculate performance difference
+  const differences = md5Times.map((md5, i) => {
+    return ((sha256Times[i] - md5) / md5 * 100).toFixed(1);
+  });
+  
+  // Generate detailed explanation
+  generateGraphExplanation(labels, md5Times, sha256Times, differences);
+  
   perfChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
       datasets: [
         {
-          label: 'MD5',
+          label: 'MD5 (Deprecated)',
           data: md5Times,
-          backgroundColor: 'rgba(244, 67, 54, 0.2)',
+          backgroundColor: 'rgba(244, 67, 54, 0.15)',
           borderColor: 'rgba(244, 67, 54, 1)',
-          borderWidth: 3,
-          pointRadius: 6,
+          borderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
           pointBackgroundColor: 'rgba(244, 67, 54, 1)',
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
-          tension: 0.4
+          pointHoverBorderWidth: 2,
+          tension: 0.4,
+          fill: true
         },
         {
-          label: 'SHA-256',
+          label: 'SHA-256 (Recommended)',
           data: sha256Times,
-          backgroundColor: 'rgba(76, 175, 80, 0.2)',
+          backgroundColor: 'rgba(76, 175, 80, 0.15)',
           borderColor: 'rgba(76, 175, 80, 1)',
-          borderWidth: 3,
-          pointRadius: 6,
+          borderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
           pointBackgroundColor: 'rgba(76, 175, 80, 1)',
           pointBorderColor: '#fff',
           pointBorderWidth: 2,
-          tension: 0.4
+          pointHoverBorderWidth: 2,
+          tension: 0.4,
+          fill: true
         }
       ]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
+      aspectRatio: 2,
+      layout: {
+        padding: {
+          left: 10,
+          right: 10,
+          top: 10,
+          bottom: 10
+        }
+      },
       scales: {
         y: {
           beginAtZero: true,
           title: {
             display: true,
             text: 'Time (milliseconds)',
-            font: { size: 14, weight: 'bold' }
+            font: { size: 14, weight: 'bold' },
+            color: '#2c3e50',
+            padding: { top: 10, bottom: 10 }
+          },
+          ticks: {
+            font: { size: 11 },
+            color: '#555',
+            padding: 8,
+            callback: function(value) {
+              return value.toFixed(3);
+            }
           },
           grid: {
-            color: 'rgba(0, 0, 0, 0.05)'
+            color: 'rgba(0, 0, 0, 0.08)',
+            drawBorder: true,
+            borderColor: '#ddd',
+            borderWidth: 1
           }
         },
         x: {
           title: {
             display: true,
             text: 'Test Inputs',
-            font: { size: 14, weight: 'bold' }
+            font: { size: 14, weight: 'bold' },
+            color: '#2c3e50',
+            padding: { top: 10, bottom: 10 }
+          },
+          ticks: {
+            font: { size: 11 },
+            color: '#555',
+            maxRotation: 0,
+            minRotation: 0,
+            padding: 8
           },
           grid: {
-            display: false
+            display: true,
+            color: 'rgba(0, 0, 0, 0.05)',
+            drawBorder: true,
+            borderColor: '#ddd',
+            borderWidth: 1
           }
         }
       },
@@ -371,37 +484,143 @@ function updateChart(labels, md5Times, sha256Times) {
         legend: {
           display: true,
           position: 'top',
+          align: 'center',
           labels: {
-            font: { size: 13, weight: '600' },
-            padding: 15,
-            usePointStyle: true
+            font: { size: 12, weight: '600' },
+            padding: 12,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            color: '#2c3e50',
+            boxWidth: 8,
+            boxHeight: 8
           }
         },
         title: {
-          display: true,
-          text: 'Hash Generation Time Comparison Across Multiple Inputs',
-          font: { size: 16, weight: 'bold' },
-          color: '#2c3e50',
-          padding: 20
+          display: false
         },
         tooltip: {
           callbacks: {
+            title: function(context) {
+              return context[0].label;
+            },
             label: function(context) {
-              return context.dataset.label + ': ' + context.parsed.y.toFixed(3) + ' ms';
+              const label = context.dataset.label || '';
+              const value = context.parsed.y.toFixed(4);
+              return label + ': ' + value + ' ms';
+            },
+            afterLabel: function(context) {
+              const index = context.dataIndex;
+              const diff = differences[index];
+              if (context.datasetIndex === 1) {
+                return 'SHA-256 is ' + Math.abs(diff) + '% ' + (diff > 0 ? 'slower' : 'faster');
+              }
+              return '';
             }
           },
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          padding: 12,
-          titleFont: { size: 13 },
-          bodyFont: { size: 12 }
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          padding: 14,
+          titleFont: { size: 13, weight: 'bold' },
+          bodyFont: { size: 12 },
+          borderColor: 'rgba(255, 255, 255, 0.3)',
+          borderWidth: 1
         }
       },
       interaction: {
         mode: 'index',
         intersect: false
+      },
+      animation: {
+        duration: 1000,
+        easing: 'easeInOutQuart'
       }
     }
   });
+}
+
+function generateGraphExplanation(labels, md5Times, sha256Times, differences) {
+  const explanationDiv = document.getElementById('explanationContent');
+  
+  let explanation = `
+    <p><strong>Step 1: Data Collection</strong></p>
+    <ul style="margin: 10px 0 20px 20px;">
+      <li>Each input text was hashed <strong>10 times</strong> using both MD5 and SHA-256</li>
+      <li>We measured the time for each hash operation using <code>performance.now()</code></li>
+      <li>Total of <strong>${labels.length * 10 * 2} hash operations</strong> performed (${labels.length} inputs × 10 iterations × 2 algorithms)</li>
+      <li>Average time calculated for each input to eliminate random variance</li>
+    </ul>
+    
+    <p><strong>Step 2: Data Points Collected</strong></p>
+    <table style="width: 100%; margin: 10px 0 20px 0; border-collapse: collapse; font-size: 13px;">
+      <tr style="background: #34495e; color: white;">
+        <th style="padding: 8px; text-align: left;">Input</th>
+        <th style="padding: 8px; text-align: center;">MD5 Avg (ms)</th>
+        <th style="padding: 8px; text-align: center;">SHA-256 Avg (ms)</th>
+        <th style="padding: 8px; text-align: center;">Coordinates</th>
+      </tr>`;
+  
+  for (let i = 0; i < labels.length; i++) {
+    explanation += `
+      <tr style="background: ${i % 2 === 0 ? '#f9f9f9' : '#fff'}; border-bottom: 1px solid #ddd;">
+        <td style="padding: 8px;">${labels[i]}</td>
+        <td style="padding: 8px; text-align: center; color: #e74c3c; font-weight: bold;">${md5Times[i].toFixed(4)}</td>
+        <td style="padding: 8px; text-align: center; color: #27ae60; font-weight: bold;">${sha256Times[i].toFixed(4)}</td>
+        <td style="padding: 8px; text-align: center; font-family: monospace; font-size: 12px;">
+          <span style="color: #e74c3c;">MD5(${i+1}, ${md5Times[i].toFixed(4)})</span><br>
+          <span style="color: #27ae60;">SHA(${i+1}, ${sha256Times[i].toFixed(4)})</span>
+        </td>
+      </tr>`;
+  }
+  
+  explanation += `
+    </table>
+    
+    <p><strong>Step 3: Plotting on Graph</strong></p>
+    <ul style="margin: 10px 0 20px 20px;">
+      <li><strong>X-axis:</strong> Input labels (Input 1, Input 2, ... Input 5)</li>
+      <li><strong>Y-axis:</strong> Time in milliseconds (auto-scaled based on data range)</li>
+      <li><strong>Red Line (MD5):</strong> Connects points ${md5Times.map((t, i) => `(${i+1}, ${t.toFixed(4)})`).join(' → ')}</li>
+      <li><strong>Green Line (SHA-256):</strong> Connects points ${sha256Times.map((t, i) => `(${i+1}, ${t.toFixed(4)})`).join(' → ')}</li>
+    </ul>
+    
+    <p><strong>Step 4: Mathematical Calculations</strong></p>
+    <div style="background: #fff; padding: 15px; border-radius: 4px; margin: 10px 0;">`;
+  
+  for (let i = 0; i < labels.length; i++) {
+    const diff = differences[i];
+    explanation += `
+      <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 3px solid ${diff > 0 ? '#e74c3c' : '#27ae60'};">
+        <strong>Input ${i+1}:</strong><br>
+        <code style="font-size: 12px;">
+          MD5 = ${md5Times[i].toFixed(4)} ms<br>
+          SHA-256 = ${sha256Times[i].toFixed(4)} ms<br>
+          Difference = ${sha256Times[i].toFixed(4)} - ${md5Times[i].toFixed(4)} = ${(sha256Times[i] - md5Times[i]).toFixed(4)} ms<br>
+          Percentage = ((${sha256Times[i].toFixed(4)} - ${md5Times[i].toFixed(4)}) / ${md5Times[i].toFixed(4)}) × 100 = ${diff}%
+        </code>
+      </div>`;
+  }
+  
+  explanation += `
+    </div>
+    
+    <p><strong>Step 5: Graph Rendering</strong></p>
+    <ul style="margin: 10px 0 20px 20px;">
+      <li>Chart.js library reads the arrays: <code>md5Times = [${md5Times.map(t => t.toFixed(4)).join(', ')}]</code></li>
+      <li>And: <code>sha256Times = [${sha256Times.map(t => t.toFixed(4)).join(', ')}]</code></li>
+      <li>Each value is plotted at its corresponding position on the X-axis</li>
+      <li>Lines connect the points with smooth curves (tension = 0.3)</li>
+      <li>The visual result shows performance trends across different inputs</li>
+    </ul>
+    
+    <p><strong>Key Observations:</strong></p>
+    <ul style="margin: 10px 0 0 20px;">
+      <li>SHA-256 is consistently <strong>${differences.every(d => d > 0) ? 'slower' : 'varies'}</strong> compared to MD5</li>
+      <li>Average overhead: <strong>${(differences.reduce((a, b) => a + parseFloat(b), 0) / differences.length).toFixed(1)}%</strong></li>
+      <li>The pattern shows ${md5Times[0] < md5Times[md5Times.length - 1] ? 'increasing' : 'varying'} times as input complexity changes</li>
+      <li>Both algorithms scale ${Math.abs(md5Times[md5Times.length - 1] - md5Times[0]) < 0.01 ? 'consistently' : 'differently'} with input variation</li>
+    </ul>
+  `;
+  
+  explanationDiv.innerHTML = explanation;
 }
 </script>
 </body>
