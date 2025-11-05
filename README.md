@@ -2,6 +2,12 @@
 
 A web-based educational tool demonstrating the critical differences between MD5 and SHA-256 hashing algorithms, with interactive performance testing and comprehensive justification for using SHA-256 over MD5 in security applications.
 
+## 🌐 Live Demo
+
+**🔗 [View Live Demo](https://cyber-assignment-c63oek6ty-chillirogers-projects.vercel.app)**
+
+Deployed on Vercel for instant access.
+
 ## 🎯 Project Overview
 
 This project provides a hands-on demonstration of cryptographic hash functions, specifically comparing the deprecated MD5 algorithm with the industry-standard SHA-256. Users can:
@@ -78,7 +84,33 @@ This project provides a hands-on demonstration of cryptographic hash functions, 
 ### Alternative: Direct File Access
 Simply open `index.html` directly in your browser. However, some features may require a local server due to CORS policies.
 
-## 📖 Usage Guide
+## � Deployment
+
+This project is configured for easy deployment on Vercel.
+
+### Deploy to Vercel
+
+1. **Install Vercel CLI** (if not already installed)
+   ```bash
+   npm install -g vercel
+   ```
+
+2. **Deploy to production**
+   ```bash
+   vercel --prod
+   ```
+
+3. **Follow the prompts** to link your project and deploy
+
+The project includes a `vercel.json` configuration file for optimal deployment settings.
+
+### Deploy to Other Platforms
+
+- **GitHub Pages**: Push to GitHub and enable Pages in repository settings
+- **Netlify**: Drag and drop the project folder or connect via GitHub
+- **Any Static Host**: Upload `index.html` and associated files
+
+## �📖 Usage Guide
 
 ### Generating Hashes
 1. Navigate to the "Hash Generator" section
