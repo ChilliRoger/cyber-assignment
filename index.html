@@ -348,23 +348,41 @@ async function runPerformanceTest(){
     }
     
     // Calculate averages
-    const md5AvgTime = (md5TotalTime / iterations).toFixed(4);
-    const sha256AvgTime = (sha256TotalTime / iterations).toFixed(4);
-    const percentDiff = (((sha256AvgTime - md5AvgTime) / md5AvgTime) * 100).toFixed(1);
+    const md5AvgTime = md5TotalTime / iterations;
+    const sha256AvgTime = sha256TotalTime / iterations;
     
-    md5Times.push(parseFloat(md5AvgTime));
-    sha256Times.push(parseFloat(sha256AvgTime));
+    // Handle percentage calculation with proper logic
+    let percentDiff;
+    let diffDisplay;
+    
+    if (md5AvgTime === 0 && sha256AvgTime === 0) {
+      // Both are effectively zero (very fast, below measurement precision)
+      percentDiff = 0;
+      diffDisplay = '<span style="color: #95a5a6;">~0% (both < 0.0001ms)</span>';
+    } else if (md5AvgTime === 0 || md5AvgTime < 0.0001) {
+      // MD5 is too fast to measure accurately
+      const diff = (sha256AvgTime - md5AvgTime).toFixed(4);
+      diffDisplay = `<span style="color: #e74c3c;">+${diff}ms</span>`;
+      percentDiff = sha256AvgTime > md5AvgTime ? 1 : 0;
+    } else {
+      // Normal calculation
+      percentDiff = ((sha256AvgTime - md5AvgTime) / md5AvgTime) * 100;
+      diffDisplay = `<span style="color: ${percentDiff > 0 ? '#e74c3c' : '#27ae60'};">
+        ${percentDiff > 0 ? '+' : ''}${percentDiff.toFixed(1)}%
+      </span>`;
+    }
+    
+    md5Times.push(md5AvgTime);
+    sha256Times.push(sha256AvgTime);
     
     // Add to table
     tableHTML += `
       <tr>
         <td>${label}</td>
         <td>${input.length}</td>
-        <td>${md5AvgTime}</td>
-        <td>${sha256AvgTime}</td>
-        <td style="color: ${percentDiff > 0 ? '#e74c3c' : '#27ae60'};">
-          ${percentDiff > 0 ? '+' : ''}${percentDiff}%
-        </td>
+        <td>${md5AvgTime.toFixed(4)}</td>
+        <td>${sha256AvgTime.toFixed(4)}</td>
+        <td>${diffDisplay}</td>
       </tr>`;
   }
   
@@ -399,8 +417,12 @@ function updateChart(labels, md5Times, sha256Times) {
     perfChart.destroy();
   }
   
-  // Calculate performance difference
+  // Calculate performance difference with proper handling
   const differences = md5Times.map((md5, i) => {
+    if (md5 === 0 || md5 < 0.0001) {
+      // If MD5 time is too small, return absolute difference
+      return ((sha256Times[i] - md5) * 1000).toFixed(1); // Convert to microseconds
+    }
     return ((sha256Times[i] - md5) / md5 * 100).toFixed(1);
   });
   
@@ -535,9 +557,18 @@ function updateChart(labels, md5Times, sha256Times) {
             },
             afterLabel: function(context) {
               const index = context.dataIndex;
-              const diff = differences[index];
+              const diff = parseFloat(differences[index]);
+              const md5Val = md5Times[index];
+              const sha256Val = sha256Times[index];
+              
               if (context.datasetIndex === 1) {
-                return 'SHA-256 is ' + Math.abs(diff) + '% ' + (diff > 0 ? 'slower' : 'faster');
+                if (md5Val === 0 && sha256Val === 0) {
+                  return 'Both: < 0.0001ms (too fast to measure)';
+                } else if (md5Val < 0.0001) {
+                  return 'Difference: ' + (sha256Val - md5Val).toFixed(4) + 'ms';
+                } else {
+                  return 'SHA-256 is ' + Math.abs(diff) + '% ' + (diff > 0 ? 'slower' : 'faster');
+                }
               }
               return '';
             }
@@ -611,15 +642,26 @@ function generateGraphExplanation(labels, md5Times, sha256Times, differences) {
     <div style="background: #fff; padding: 15px; border-radius: 4px; margin: 10px 0;">`;
   
   for (let i = 0; i < labels.length; i++) {
-    const diff = differences[i];
+    const diff = parseFloat(differences[i]);
+    const md5Val = md5Times[i];
+    const sha256Val = sha256Times[i];
+    const timeDiff = (sha256Val - md5Val).toFixed(4);
+    
+    let percentCalc;
+    if (md5Val < 0.0001) {
+      percentCalc = `Time difference = ${timeDiff} ms (MD5 too fast for accurate % calculation)`;
+    } else {
+      percentCalc = `Percentage = ((${sha256Val.toFixed(4)} - ${md5Val.toFixed(4)}) / ${md5Val.toFixed(4)}) × 100 = ${diff}%`;
+    }
+    
     explanation += `
       <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 3px solid ${diff > 0 ? '#e74c3c' : '#27ae60'};">
         <strong>Input ${i+1}:</strong><br>
         <code style="font-size: 12px;">
-          MD5 = ${md5Times[i].toFixed(4)} ms<br>
-          SHA-256 = ${sha256Times[i].toFixed(4)} ms<br>
-          Difference = ${sha256Times[i].toFixed(4)} - ${md5Times[i].toFixed(4)} = ${(sha256Times[i] - md5Times[i]).toFixed(4)} ms<br>
-          Percentage = ((${sha256Times[i].toFixed(4)} - ${md5Times[i].toFixed(4)}) / ${md5Times[i].toFixed(4)}) × 100 = ${diff}%
+          MD5 = ${md5Val.toFixed(4)} ms<br>
+          SHA-256 = ${sha256Val.toFixed(4)} ms<br>
+          Difference = ${sha256Val.toFixed(4)} - ${md5Val.toFixed(4)} = ${timeDiff} ms<br>
+          ${percentCalc}
         </code>
       </div>`;
   }
@@ -638,9 +680,10 @@ function generateGraphExplanation(labels, md5Times, sha256Times, differences) {
     
     <p><strong>Key Observations:</strong></p>
     <ul style="margin: 10px 0 0 20px;">
-      <li>SHA-256 is consistently <strong>${differences.every(d => d > 0) ? 'slower' : 'varies'}</strong> compared to MD5</li>
-      <li>Average overhead: <strong>${(differences.reduce((a, b) => a + parseFloat(b), 0) / differences.length).toFixed(1)}%</strong></li>
-      <li>The pattern shows ${md5Times[0] < md5Times[md5Times.length - 1] ? 'increasing' : 'varying'} times as input complexity changes</li>
+      <li>SHA-256 is generally <strong>${sha256Times.every((sha, i) => sha >= md5Times[i]) ? 'slower' : 'varies in performance'}</strong> compared to MD5</li>
+      <li>Average time difference: <strong>${((sha256Times.reduce((a, b) => a + b, 0) - md5Times.reduce((a, b) => a + b, 0)) / sha256Times.length).toFixed(4)} ms</strong></li>
+      <li>For very short inputs (< 5 chars), both algorithms complete in <strong>< 0.001ms</strong> (sub-millisecond)</li>
+      <li>Performance difference becomes more measurable with longer/complex inputs</li>
       <li>Both algorithms scale ${Math.abs(md5Times[md5Times.length - 1] - md5Times[0]) < 0.01 ? 'consistently' : 'differently'} with input variation</li>
     </ul>
   `;
