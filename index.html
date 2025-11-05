@@ -94,8 +94,8 @@ canvas { max-width: 100%; height: auto !important; }
 <h2>2. SHA-256 vs MD5: Hash Generator</h2>
 <div class="content-card">
 <p>Type text below and compare how MD5 and SHA-256 generate different hashes.</p>
-<input type="text" id="hashInput" placeholder="Enter text here..." />
-<button onclick="generateHashes()">Generate Hashes</button>
+<input type="text" id="hashInput" placeholder="Enter text here..." required />
+<button id="generateHashBtn" onclick="generateHashes()">Generate Hashes</button>
 <div class="output" id="md5out">MD5: </div>
 <div class="output" id="shaout">SHA-256: </div>
 </div>
@@ -241,8 +241,33 @@ function md5(string) {
 
 async function generateHashes() {
   const text = document.getElementById("hashInput").value;
-  document.getElementById("md5out").innerText = "MD5: " + md5(text);
-  document.getElementById("shaout").innerText = "SHA-256: " + await sha256(text);
+  
+  // Validate input is not empty
+  if (!text || text.trim() === '') {
+    alert('Please enter some text to generate hashes.');
+    document.getElementById("md5out").innerText = "MD5: ";
+    document.getElementById("shaout").innerText = "SHA-256: ";
+    return;
+  }
+  
+  // Disable button during generation
+  const btn = event?.target;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = "Generating...";
+  }
+  
+  try {
+    document.getElementById("md5out").innerText = "MD5: " + md5(text);
+    document.getElementById("shaout").innerText = "SHA-256: " + await sha256(text);
+  } catch (error) {
+    alert('Error generating hashes: ' + error.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = "Generate Hashes";
+    }
+  }
 }
 
 let perfChart = null;
