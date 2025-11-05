@@ -217,11 +217,6 @@ Contributions are welcome! To contribute:
 
 This project is open-source and available for educational purposes.
 
-## 👤 Author
-
-**ChilliRoger**
-- GitHub: [@ChilliRoger](https://github.com/ChilliRoger)
-- Repository: [cyber-assignment](https://github.com/ChilliRoger/cyber-assignment)
 
 ## 🙏 Acknowledgments
 
